@@ -142,14 +142,44 @@ class Plugin:
       self.api.setStatus("STARTED", "using usbid %s, baud=4800" % (usbid))
     else:
       self.api.setStatus("STARTED","using device %s, baud=4800"%(self.device))
-    connectionHandler=threading.Thread(target=self.handleConnection, name='seatalk-remote-connection')
+    connectionHandler=threading.Thread(target=self.handleConnection, name='anchor-chain-simulator')
     connectionHandler.setDaemon(True)
     connectionHandler.start()
     while changeSequence == self.changeSequence:
       if not self.isConnected:
         return {'status': 'not connected'}
       try:
-        time.sleep(1)
+        if(self.Counter >= 100):
+          self.Up = False 
+        if(self.Counter <= 0):
+          self.Up = True
+
+        p = struct.pack('I', 0)
+        flags = fcntl.ioctl(self.fd, termios.TIOCMGET, p)
+        flags = struct.unpack('I', flags)[0]
+        flags |= termios.TIOCM_DTR
+        if ( self.Up ):
+          flags |= termios.TIOCM_RTS
+          self.Counter += 1
+        else:
+          flags &= ~termios.TIOCM_RTS
+          self.Counter -= 1
+        p = struct.pack('I', flags)
+        fcntl.ioctl(self.fd, termios.TIOCMSET, p)
+
+        time.sleep(0.010)
+
+        p = struct.pack('I', 0)
+        flags = fcntl.ioctl(self.fd, termios.TIOCMGET, p)
+        flags = struct.unpack('I', flags)[0]
+        flags &= ~termios.TIOCM_DTR
+        p = struct.pack('I', flags)
+        fcntl.ioctl(self.fd, termios.TIOCMSET, p)
+
+        if(int(self.debuglevel) > 0):
+          self.api.log("counter=" + str(self.Counter) + ", Up=" + str(self.Up))
+
+        time.sleep(0.3)
 
       except Exception as e:
         self.api.error("unable to send command to %s: %s" % (self.device, str(e)))
@@ -180,35 +210,7 @@ class Plugin:
           errorReported=False
           while True:
 
-            #self.api.log("Counter: " + str(self.Counter))
-            if(self.Counter >= 100):
-              self.Up = False 
-            if(self.Counter <= 0):
-              self.Up = True
-
-            p = struct.pack('I', 0)
-            flags = fcntl.ioctl(self.fd, termios.TIOCMGET, p)
-            flags = struct.unpack('I', flags)[0]
-            flags |= termios.TIOCM_DTR
-            if ( self.Up ):
-              flags |= termios.TIOCM_RTS
-              self.Counter += 1
-            else:
-              flags &= ~termios.TIOCM_RTS
-              self.Counter -= 1
-            p = struct.pack('I', flags)
-            fcntl.ioctl(self.fd, termios.TIOCMSET, p)
-
-            time.sleep(0.005)
-
-            p = struct.pack('I', 0)
-            flags = fcntl.ioctl(self.fd, termios.TIOCMGET, p)
-            flags = struct.unpack('I', flags)[0]
-            flags &= ~termios.TIOCM_DTR
-            p = struct.pack('I', flags)
-            fcntl.ioctl(self.fd, termios.TIOCMSET, p)
-
-            time.sleep(1)
+            time.sleep(10)
 
         except Exception as e:
           if not errorReported:
